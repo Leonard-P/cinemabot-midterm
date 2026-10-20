@@ -6,7 +6,7 @@
 
 ---
 
-## 2. Scope
+## 2. Scop
 
 ### What the bot DOES (In-Scope)
 * **Book movie tickets (`BookTickets`):** Collects movie title, date, showtime, ticket quantity, and screening format, validates them against `catalog.json`, confirms the reservation details, and issues a mock booking reference.
