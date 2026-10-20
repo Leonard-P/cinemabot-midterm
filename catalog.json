@@ -1,0 +1,59 @@
+{
+  "movies": [
+    {
+      "title": "Dune: Part Two",
+      "synonyms": ["Dune", "Dune 2", "Dune Part 2", "Dune Two"],
+      "formats": ["Standard", "IMAX", "3D"],
+      "showtimes": {
+        "Standard": ["12:00", "15:00", "18:00", "21:00"],
+        "IMAX":     ["14:00", "17:30", "20:30"],
+        "3D":       ["13:00", "16:00", "19:00"]
+      },
+      "price": {"Standard": 14, "IMAX": 22, "3D": 18}
+    },
+    {
+      "title": "Oppenheimer",
+      "synonyms": ["Oppy", "Oppenheimer film", "Oppy film"],
+      "formats": ["Standard", "IMAX"],
+      "showtimes": {
+        "Standard": ["13:00", "16:30", "20:00"],
+        "IMAX":     ["15:00", "19:00"]
+      },
+      "price": {"Standard": 14, "IMAX": 22}
+    },
+    {
+      "title": "Inside Out 2",
+      "synonyms": ["Inside Out", "Inside Out Two", "IO2"],
+      "formats": ["Standard", "3D"],
+      "showtimes": {
+        "Standard": ["11:00", "14:00", "17:00", "20:00"],
+        "3D":       ["12:30", "15:30", "18:30"]
+      },
+      "price": {"Standard": 14, "3D": 18}
+    },
+    {
+      "title": "Civil War",
+      "synonyms": ["Civil War film", "CW"],
+      "formats": ["Standard"],
+      "showtimes": {
+        "Standard": ["13:30", "17:00", "20:30"]
+      },
+      "price": {"Standard": 14}
+    },
+    {
+      "title": "Interstellar",
+      "synonyms": ["interstellar film", "Nolan space film"],
+      "formats": ["Standard", "IMAX"],
+      "showtimes": {
+        "Standard": ["14:00", "18:00"],
+        "IMAX":     ["16:00", "20:00"]
+      },
+      "price": {"Standard": 14, "IMAX": 22}
+    }
+  ],
+  "format_synonyms": {
+    "Standard": ["standard", "regular", "2d", "normal", "non-imax"],
+    "IMAX":     ["imax"],
+    "3D":       ["3d", "reald 3d", "three d", "3-d"]
+  }
+}
