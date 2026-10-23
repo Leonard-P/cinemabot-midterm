@@ -1,0 +1,217 @@
+{
+  "theater": {
+    "name": "CineBot Demo Cinema",
+    "timezone": "America/Denver",
+    "currency": "USD"
+  },
+  "movies": [
+    {
+      "id": "dune_part_two",
+      "title": "Dune: Part Two",
+      "synonyms": [
+        "Dune 2",
+        "Dune Two",
+        "Dune"
+      ],
+      "active": true,
+      "screenings": [
+        {
+          "day_offset": 0,
+          "time": "14:30",
+          "formats": [
+            "Standard",
+            "IMAX"
+          ]
+        },
+        {
+          "day_offset": 0,
+          "time": "19:00",
+          "formats": [
+            "Standard",
+            "IMAX"
+          ]
+        },
+        {
+          "day_offset": 1,
+          "time": "21:30",
+          "formats": [
+            "Standard",
+            "IMAX"
+          ]
+        },
+        {
+          "day_offset": 2,
+          "time": "18:00",
+          "formats": [
+            "Standard"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "oppenheimer",
+      "title": "Oppenheimer",
+      "synonyms": [
+        "Oppy",
+        "Oppen"
+      ],
+      "active": true,
+      "screenings": [
+        {
+          "day_offset": 0,
+          "time": "18:30",
+          "formats": [
+            "Standard"
+          ]
+        },
+        {
+          "day_offset": 1,
+          "time": "20:00",
+          "formats": [
+            "Standard",
+            "IMAX"
+          ]
+        },
+        {
+          "day_offset": 2,
+          "time": "15:00",
+          "formats": [
+            "Standard",
+            "IMAX"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "inside_out_2",
+      "title": "Inside Out 2",
+      "synonyms": [
+        "Inside Out",
+        "Inside Out Two"
+      ],
+      "active": true,
+      "screenings": [
+        {
+          "day_offset": 0,
+          "time": "13:00",
+          "formats": [
+            "Standard",
+            "3D"
+          ]
+        },
+        {
+          "day_offset": 1,
+          "time": "16:00",
+          "formats": [
+            "Standard",
+            "3D"
+          ]
+        },
+        {
+          "day_offset": 2,
+          "time": "11:30",
+          "formats": [
+            "Standard"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "civil_war",
+      "title": "Civil War",
+      "synonyms": [],
+      "active": true,
+      "screenings": [
+        {
+          "day_offset": 0,
+          "time": "20:30",
+          "formats": [
+            "Standard"
+          ]
+        },
+        {
+          "day_offset": 1,
+          "time": "21:30",
+          "formats": [
+            "Standard"
+          ]
+        },
+        {
+          "day_offset": 2,
+          "time": "19:00",
+          "formats": [
+            "Standard",
+            "IMAX"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "interstellar",
+      "title": "Interstellar",
+      "synonyms": [
+        "Interstellar IMAX",
+        "Interstellar re-release"
+      ],
+      "active": true,
+      "screenings": [
+        {
+          "day_offset": 0,
+          "time": "14:00",
+          "formats": [
+            "Standard",
+            "IMAX"
+          ]
+        },
+        {
+          "day_offset": 1,
+          "time": "19:30",
+          "formats": [
+            "Standard",
+            "IMAX"
+          ]
+        },
+        {
+          "day_offset": 2,
+          "time": "16:30",
+          "formats": [
+            "Standard"
+          ]
+        }
+      ]
+    }
+  ],
+  "formats": [
+    {
+      "name": "Standard",
+      "synonyms": [
+        "regular",
+        "normal",
+        "2D",
+        "standard"
+      ]
+    },
+    {
+      "name": "IMAX",
+      "synonyms": [
+        "imax",
+        "IMAX screen"
+      ]
+    },
+    {
+      "name": "3D",
+      "synonyms": [
+        "RealD 3D",
+        "three dimensional",
+        "3-d"
+      ]
+    }
+  ],
+  "booking_rules": {
+    "minimum_tickets": 1,
+    "maximum_tickets_without_handoff": 10,
+    "booking_id_pattern": "^CB-\\d{4}$",
+    "default_format": "Standard",
+    "require_user_confirmation": true
+  }
+}

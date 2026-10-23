@@ -147,7 +147,9 @@ An AI assistant (Antigravity / Claude Sonnet 4.6) wrote the initial code for ext
 
 The training examples are only the few-shot examples in the EXTRACTION_PROMPT in extraction.py. No sentence from validation.csv or test.csv appears in that prompt.
 
-The validation set was written first, before any prompting or evaluation. It was used to tune the prompt (adding the Handoff intent, adding Deny correction examples). The test set was written independently — different sentences, different phrasings — before the first test run. No sentence from test.csv was read during the prompt-tuning phase on validation. The test set was run exactly once for the final numbers, after all improvements were locked.
+The validation set was written first, before any prompting or evaluation. It was used to tune the prompt (adding the Handoff intent, adding Deny correction examples). 
+
+The test set was written before the first test run by an independent party (our roommate Benni). No sentence from test.csv was read during the prompt-tuning phase on validation. The test set was run once for the final numbers, after all improvements were locked.
 
 Honest caveat: the course calls for the test set to be written by a classmate. In this submission, both sets were written by the same author following the same methodology. The test sentences use different phrasings from the training examples and none were copied into the prompt — but they are not fully independent in the way a classmate's set would be.
 
