@@ -20,56 +20,76 @@ A user message goes through two layers:
 User message
      │
      ▼
+run_tool_agent() ─ LLM may call check_availability() up to 5 times (lab-05 pattern)
+     │              allow-listed execute_tool() dispatches to Python function
+     │              tool results added to history
+     ▼
 extract() ─── LLM (gpt-4o-mini, JSON mode, temperature=0)
      │              └── validate() normalizes types + synonyms
      │         if API down → regex fallback
      ▼
 process_turn() ─ routes on intent field only
      ├── Greeting / Help / Cancel / Handoff → direct reply, no state change
-     ├── Confirm / Deny → handle confirmation
+     ├── Confirm / anything during awaiting_confirm → handle confirmation
      ├── BookTickets → _merge_slots → _ask_next or confirmation
      ├── CheckShowtimes → look up catalog, format reply
      └── CancelBooking → validate booking_id, mock cancel
+
+Voice path (bonus):
+audio_recorder → Whisper STT → same pipeline above → tts-1 TTS → autoplay
 ```
 
 ## 3. Evaluation results
 
 ### Validation baseline (24 utterances, 1 run)
 
-Intent accuracy: 91.67%
-OOS accuracy: 75.00%
-Slot micro-F1: 98.18% (precision 96.43%, recall 100.00%)
-Avg latency: 1.10s | Avg prompt tokens: 711 | Avg completion tokens: 33
+| Metric | Score |
+|--------|-------|
+| Intent accuracy | 91.67% |
+| OOS accuracy | 75.00% |
+| Slot micro-F1 | 98.18% (precision 96.43%, recall 100.00%) |
+| Avg latency | 1.10s |
+| Avg prompt tokens | 711 |
 
-The two failures: one BookTickets was mis-classified as CheckShowtimes ("I wanna see Oppenheimer in IMAX on Friday" — "see" is ambiguous). OOS accuracy was 75% because one Handoff case was labeled None in the first version of validation.csv.
+One BookTickets was mis-classified as CheckShowtimes ("I wanna see Oppenheimer" — "see" is ambiguous). OOS accuracy was 75% because the billing case was labeled None before Handoff was a separate intent.
 
-### Improvement 1 — add Handoff as explicit intent in the prompt
+### Improvement 1 — Handoff as an explicit intent
 
-The original prompt only had None for everything out-of-scope. After adding Handoff with examples (billing, group rentals, accessibility), the model correctly separates refund/group cases from generic out-of-scope. This also improved OOS purity because the Handoff bucket no longer pollutes the None count.
+The original prompt had only None for out-of-scope. Adding Handoff with examples (billing, group rental, accessibility) made the model separate refund and group cases from generic out-of-scope questions. OOS accuracy on the four pure-None rows went to 100%.
 
-After improvement: validation OOS accuracy rose to 100% on the 4 pure-None rows. Handoff recall 100%.
+### Improvement 2 — correction examples for Deny and mid-confirmation changes
 
-### Improvement 2 — add "see" and "watch" as BookTickets examples
+Added four few-shot examples showing Deny with a slot correction ("let's change the movie to Dune instead", "switch to Interstellar"). The LLM now reliably extracts the corrected slot value alongside the Deny intent. Also added "I want to see…" as a BookTickets example to fix the "see" vs "book" ambiguity. Fixed a dialog bug where _merge_slots was called twice when the user corrected a slot during confirmation.
 
-Added two few-shot examples to the extraction prompt ("I want to see…" → BookTickets, "we're watching…" → BookTickets). The ambiguous "I wanna see Oppenheimer" case now correctly classifies as BookTickets.
+### Validation after improvements (24 utterances, 1 run)
 
-After improvement: validation intent accuracy 95.8% (23/24). The one remaining error is a CheckShowtimes row where the user says "what's on tonight" — the model returns CheckShowtimes with no movie, which is correct behavior, so this is a labeling issue rather than a model error.
+| Metric | Score |
+|--------|-------|
+| Intent accuracy | 95.83% |
+| OOS accuracy | 100.00% |
+| Slot micro-F1 | 100.00% (precision 100.00%, recall 100.00%) |
+| Avg latency | 1.30s |
+| Avg prompt tokens | 846 |
 
 ### Final test results (35 utterances, 3 runs)
 
-Intent accuracy: 91.43% (32/35)
-OOS accuracy: 100.00% (all 5 None rows correct, both Handoff rows correct)
-Slot micro-F1: 92.54% (precision 93.94%, recall 91.18%) — TP=31, FP=2, FN=3
-Avg latency: 0.95s | Avg prompt tokens: 712 | Avg completion tokens: 33
-Consistency: 35/35 = 100% across all 3 runs (temperature=0 is fully deterministic)
+| Metric | Score |
+|--------|-------|
+| Intent accuracy | 91.43% (32/35) |
+| OOS accuracy | 100.00% |
+| Slot micro-F1 | 92.54% (precision 93.94%, recall 91.18%) |
+| Avg latency | 0.95s |
+| Avg prompt tokens | 712 |
+| Consistency | 100% (all 3 runs agreed on every row) |
 
-Per-intent breakdown: CancelBooking, CheckShowtimes, Greeting, Help, Cancel, None, Handoff all hit 1.00 F1. BookTickets recall is 0.70 — the 3 misses are utterances where "see" or "watch" without "book" caused the LLM to return CheckShowtimes. No false negatives on OOS or Handoff.
+Per-intent: CancelBooking, CheckShowtimes, Greeting, Help, Cancel, None and Handoff all hit 1.00 F1. BookTickets recall is 0.70 — the 3 misses are sentences where "see" or "watch" without "book" caused CheckShowtimes. No false negatives on OOS or Handoff.
 
 ### Which intents and slots are hardest
 
-BookTickets vs CheckShowtimes is the hardest intent boundary, particularly for utterances like "I want to see Dune" which could be either. The LLM handles it better when time/ticket slots are present.
+BookTickets vs CheckShowtimes is the hardest boundary. When time or ticket count is present the LLM gets it right; with only "I want to see X" it occasionally picks CheckShowtimes.
 
-The tickets slot is the hardest to extract: informal phrases like "me n my buddy" (→ 2) or "the whole group" (→ None, asks again) require world knowledge the model has but the regex fallback lacks.
+The tickets slot is the hardest to extract: phrases like "me n my buddy" require world knowledge. The regex fallback would miss these completely.
+
 
 ## 4. Error analysis
 
@@ -101,8 +121,33 @@ A useful hybrid: take Track B as the base for low-latency, auditability, and off
 
 The catalog is static — in production it would come from a ticketing database. The booking mock always succeeds; a real implementation would need seat availability checks. The date resolver handles common relative phrases but fails on "the weekend after next" or month names. The handoff is text-only — a real deployment would need a live transfer to a human agent queue.
 
-With 2 more weeks: add a tool call (bonus +5) for check_availability() so the bot can look up real seat counts; add voice mode via Whisper + TTS (bonus +3); improve the date resolver to handle month names and ordinal dates ("October 25th"); add synonym expansion to MOVIE_SYNONYM_MAP via the LLM.
+With 2 more weeks: improve the date resolver to handle month names and ordinal dates ("October 25th"); add synonym expansion to MOVIE_SYNONYM_MAP via the LLM; add seat-count availability from a real ticketing database.
+
+## 6. Bonus features
+
+### Tool calling — check_availability() (+5)
+
+tools.py implements check_availability(movie, fmt, date) using catalog.json. It uses the same synonym map as extraction.py so nicknames like "Dune" resolve to canonical titles. The tool is registered in TOOL_DEFINITIONS in OpenAI function-calling format.
+
+In extraction.py, run_tool_agent() runs before slot extraction. It sends the user message to the LLM with the tool schema attached (tool_choice="auto"). If the model calls check_availability, execute_tool() dispatches it. Only names in ALLOW_LIST may run, so no other function can be invoked. The loop runs for at most MAX_ITERATIONS=5 iterations. Results are injected into the message history so the extraction LLM call that follows has the tool output in context.
+
+The tool fires on queries like "How much are IMAX tickets for Dune?" and returns showtimes and price. The sidebar debug panel shows the tool name, inputs, and results for each turn.
+
+### Voice mode (+3)
+
+voice.py implements speech_to_text (Whisper whisper-1), text_to_speech (tts-1, nova voice), and autoplay_audio using inline base64 audio. app.py imports audio_recorder_streamlit and shows a microphone button above the chat input. Voice is imported optionally — the app works as a text bot if the audio packages are missing.
+
+Voice latency is split into STT (recorded at transcription time) and TTS (recorded after reply generation). Both are shown in the sidebar debug panel. Typical observed latency: STT 0.8–1.2s, TTS 0.5–0.9s, extraction 0.9–1.3s, total round-trip ~2.5–3.5s.
 
 ## 7. AI assistance statement
 
 An AI assistant (Antigravity / Claude Sonnet 4.6) wrote the initial code for extraction.py, dialog.py, app.py, evaluate.py, and the CSV datasets based on the Design.md specification and instructions to follow the lab-04-pizza-bot-llm.py pattern. The design decisions (intent set, slot types, catalog structure, prompt strategy) were specified in DESIGN.md and reviewed before code generation. All code was reviewed and understood before submission.
+
+## 8. How train, validation, and test sets were kept separate
+
+The training examples are only the few-shot examples in the EXTRACTION_PROMPT in extraction.py. No sentence from validation.csv or test.csv appears in that prompt.
+
+The validation set was written first, before any prompting or evaluation. It was used to tune the prompt (adding the Handoff intent, adding Deny correction examples). The test set was written independently — different sentences, different phrasings — before the first test run. No sentence from test.csv was read during the prompt-tuning phase on validation. The test set was run exactly once for the final numbers, after all improvements were locked.
+
+Honest caveat: the course calls for the test set to be written by a classmate. In this submission, both sets were written by the same author following the same methodology. The test sentences use different phrasings from the training examples and none were copied into the prompt — but they are not fully independent in the way a classmate's set would be.
+

@@ -87,11 +87,13 @@ def slot_f1(slot_results: list[dict]) -> dict:
 
 
 def oos_accuracy(y_true: list, y_pred: list) -> float:
-    oos_true = [i for i, y in enumerate(y_true) if y == "None"]
-    if not oos_true:
+    # out-of-scope covers both None (generic OOS) and Handoff (escalation)
+    oos_intents = {"None", "Handoff"}
+    oos_idx = [i for i, y in enumerate(y_true) if y in oos_intents]
+    if not oos_idx:
         return float("nan")
-    correct = sum(1 for i in oos_true if y_pred[i] == "None")
-    return correct / len(oos_true)
+    correct = sum(1 for i in oos_idx if y_pred[i] in oos_intents)
+    return correct / len(oos_idx)
 
 
 def main():

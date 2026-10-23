@@ -1,137 +1,105 @@
-# DESIGN.md — CineBot: Cinema Ticket & Showtime Assistant
+# Design — CineBot
 
-## 1. Business Goal & SMART Goal
-* **Business Goal:** Automate box-office ticket reservations and showtime inquiries for an independent movie theater to reduce front-desk phone volume and speed up customer checkout.
-* **SMART Goal:** Successfully complete ticket reservations (all required slots filled, validated against the catalog, and confirmed by the user) in **5 turns or fewer for at least 85% of valid booking requests** on the evaluation set, while maintaining **90%+ slot F1** and **90%+ out-of-scope rejection accuracy**.
+## 1. Business goal
 
----
+Automate ticket reservations and showtime lookups for a small independent theater to cut front-desk call volume.
 
-## 2. Scop
+SMART goal: complete a ticket reservation in 5 turns or fewer for at least 85% of valid booking requests, with 90%+ slot F1 and 90%+ out-of-scope rejection on the evaluation set.
 
-### What the bot DOES (In-Scope)
-* **Book movie tickets (`BookTickets`):** Collects movie title, date, showtime, ticket quantity, and screening format, validates them against `catalog.json`, confirms the reservation details, and issues a mock booking reference.
-* **Check showtimes (`CheckShowtimes`):** Queries `catalog.json` to list available screening times and formats for a specific movie or date.
-* **Modify or cancel an existing booking (`CancelBooking`):** Cancels a completed reservation using a 6-character booking reference ID (e.g., `CB-4829`).
+## 2. Scope
 
-### What the bot DOES NOT do (Out-of-Scope → Polite Fallback)
-* Movie recommendations, plot summaries, reviews, or trivia (*"Who directed Dune?"*, *"What's a good scary movie?"*).
-* Concession stand orders or pricing (*"How much is a large popcorn?"*).
-* General knowledge, chitchat, math, or unrelated tasks.
+The bot handles three tasks.
 
-### When a Human Takes Over (Escalation / Handoff)
-The bot immediately triggers a human handoff (`Handoff` state) when the user asks about:
-1. **Billing & Refunds:** Credit card disputes, double charges, or refund requests for past showtimes.
-2. **Group / Private Events:** Bookings of more than 10 tickets or private theater rentals.
-3. **Accessibility & Special Accommodations:** Wheelchair companion seating issues or assistive listening device reservations.
-4. **Repeated Failures:** 3 consecutive turns where the bot fails to validate a slot or understand the user's intent.
+BookTickets: collect movie, date, showtime, ticket count and format, validate against catalog.json, confirm, and return a mock booking reference.
 
----
+CheckShowtimes: list available times and formats for a movie or date from catalog.json.
+
+CancelBooking: cancel a reservation by booking reference (format CB-XXXX).
+
+Out of scope: movie recommendations, reviews, trivia, concession orders, and anything unrelated to the theater. The bot gives a polite fallback for these.
+
+Human handoff triggers: billing disputes or refund requests, groups larger than 10, accessibility accommodation issues, and 3 consecutive turns where the bot cannot understand the user.
 
 ## 3. Intents
 
-### Task Intents (3)
+Task intents:
 
-#### 1. `BookTickets`
-Reserve seats for a specific movie screening.
-* *"Can I get two tickets for Dune: Part Two tonight at 7:00 PM?"*
-* *"Book 4 IMAX seats for Oppenheimer on Friday."*
-* *"I'd like to reserve one standard ticket for Inside Out 2 tomorrow evening."*
-* *"Grab me three seats for the 9:30pm showing of Civil War."*
-* *"Actually, make that 3 tickets in IMAX for Saturday."*
+BookTickets — reserve seats for a screening.
+- "Can I get two tickets for Dune: Part Two tonight at 7:00 PM?"
+- "Book 4 IMAX seats for Oppenheimer on Friday."
+- "I'd like to reserve one standard ticket for Inside Out 2 tomorrow evening."
+- "Grab me three seats for the 9:30pm showing of Civil War."
 
-#### 2. `CheckShowtimes`
-Ask what movies are playing or check specific screening times/formats.
-* *"What times is Dune: Part Two playing today?"*
-* *"Do you have any IMAX screenings this Saturday?"*
-* *"When is the next showing of Oppenheimer?"*
-* *"What movies are showing tomorrow night?"*
-* *"Are there any matinee showtimes for Inside Out 2 on Sunday?"*
+CheckShowtimes — ask what's playing or when.
+- "What times is Dune: Part Two playing today?"
+- "Do you have any IMAX screenings this Saturday?"
+- "When is the next showing of Oppenheimer?"
+- "What movies are showing tomorrow night?"
 
-#### 3. `CancelBooking`
-Cancel an already confirmed ticket reservation using a booking ID.
-* *"I need to cancel my reservation CB-4829."*
-* *"Can you void my ticket order? The confirmation code is CB-1094."*
-* *"Cancel booking CB-9921 please."*
-* *"I can't make it to the movie tonight, please cancel myexisting booking."*
+CancelBooking — cancel a reservation by reference code.
+- "I need to cancel my reservation CB-4829."
+- "Can you void my ticket order? The confirmation code is CB-1094."
+- "Cancel booking CB-9921 please."
+- "I can't make it tonight, cancel my existing booking."
 
----
+System intents:
 
-### Control & System Intents (4)
+Greeting — hi, hello, good morning, etc.
+Help — asking what the bot can do or how to use it.
+Cancel — abort the current task and start over.
+Confirm — yes, confirm, book it, go ahead (used at the confirmation step).
+Deny — no, change something, or a slot correction like "make it Saturday instead" or "switch to Interstellar". The corrected slot value is extracted alongside the Deny intent.
+Handoff — billing, refund, group over 10, accessibility needs.
+None — everything else out of scope.
 
-#### 4. `Greeting`
-* *"Hi there!"*
-* *"Hello, good evening."*
-* *"Hey CineBot, are you there?"*
-* *"Good morning!"*
+## 4. Slots
 
-#### 5. `Help`
-* *"What can you help me with?"*
-* *"How do I book a ticket here?"*
-* *"What commands do you understand?"*
-* *"I'm stuck, what are my options?"*
+movie: catalog list. Validated against catalog.json. Synonyms like "Dune 2" or "Oppy" are resolved to canonical titles. Required for BookTickets and optionally for CheckShowtimes.
 
-#### 6. `Cancel` (Abort current in-progress dialog)
-* *"Cancel that, start over."*
-* *"Never mind, forget it."*
-* *"Stop, I don't want to book anymore."*
-* *"Quit current task."*
+date: date string. Resolved in Python from relative phrases like "today", "tomorrow", "this Friday" to ISO YYYY-MM-DD. Required for BookTickets, optional for CheckShowtimes.
 
-#### 7. `None` (Out-of-scope or human handoff triggers)
-* *"What is the capital of France?"*
-* *"Can I order a large popcorn and a soda?"*
-* *"I was charged twice on my Visa card yesterday and need a refund."*
-* *"Who won the Oscar for Best Picture in 2024?"*
-* *"I want to rent out an entire theater for 45 people."*
+time: showtime. Normalized from 12h or colloquial forms to HH:MM (24h), then validated against the movie's showtimes in catalog.json. Required for BookTickets.
 
----
+tickets: integer 1-10. Word forms like "two" or "me and my friend" are resolved to integers. Values over 10 trigger human handoff. Required for BookTickets.
 
-## 4. Slots and Entities
+format: Standard, IMAX, or 3D. Synonyms like "regular", "2D", "reald 3d" are resolved. Validated that the chosen movie offers that format. Defaults to Standard if not specified. Required for BookTickets.
 
-| Slot Name | Type | Required For | Validation / Resolution Strategy | Allowed Values & Examples (Synonyms) |
-| :--- | :--- | :--- | :--- | :--- |
-| `movie` | **Catalog List** (`catalog.json`) | `BookTickets`, `CheckShowtimes` (opt) | **Catalog Validation:** Case-insensitive fuzzy/synonym lookup against active titles in `catalog.json`. Rejects off-catalog movies. | `"Dune: Part Two"` (*"Dune"*, *"Dune 2"*), `"Oppenheimer"` (*"Oppy"*), `"Inside Out 2"` (*"Inside Out"*), `"Civil War"`, `"Interstellar"` |
-| `date` | **Date** (`YYYY-MM-DD`) | `BookTickets`, `CheckShowtimes` (opt) | **Normalization:** Resolves relative natural language dates relative to reference date into ISO `YYYY-MM-DD`. | `"today"` → `2026-10-19`, `"tomorrow"` → `2026-10-20`, `"this Friday"` → `2026-10-23` |
-| `time` | **Time + Catalog** (`HH:MM` 24h) | `BookTickets` | **Normalization + Catalog Validation:** Converts 12h/colloquial time to 24h `HH:MM`, then checks if that showtime exists for the chosen `movie` in `catalog.json`. | `"7pm"` / `"tonight at 7"` → `"19:00"`, `"matinee"` / `"2:30 PM"` → `"14:30"`, `"9:30pm"` → `"21:30"` |
-| `tickets` | **Integer** (`1–10`) | `BookTickets` | **Normalization + Range Check:** Converts number words to `int`. Rejects `<= 0`. Values `> 10` trigger group-sales human handoff. | `"one"` / `"a ticket"` → `1`, `"two"` / `"a pair"` → `2`, `"four"` → `4` |
-| `format` | **Catalog List** (`catalog.json`) | `BookTickets` (default: `"Standard"`) | **Synonym Resolution + Catalog Validation:** Maps synonyms to canonical format and verifies the movie supports that format in `catalog.json`. | `"Standard"` (*"regular"*, *"2D"*, *"normal"*), `"IMAX"` (*"imax"*), `"3D"` (*"RealD 3D"*) |
-| `booking_id`| **Regex** (`^CB-\d{4}$`) | `CancelBooking` | **Regex Validation:** Validated in Python via `re.match(r"^CB-\d{4}$", val.upper())`. | `"CB-4829"`, `"CB-1094"` |
+booking_id: regex CB-\d{4}. Required for CancelBooking.
 
----
-
-## 5. Dialog Flow
+## 5. Dialog flow
 
 ```mermaid
 flowchart TD
-    Start([User Message]) --> LLM[LLM JSON Extraction: intent + raw slots]
-    LLM -->|API Error / Invalid JSON| FallbackRegex[Regex & Keyword Fallback Extractor]
-    LLM -->|Valid JSON| Validate[Python validate: Catalog Check + Date/Time/Int Normalization]
-    FallbackRegex --> Validate
+    Start([User message]) --> LLM[LLM extraction: intent + raw slots]
+    LLM -->|API error / bad JSON| Regex[Regex + keyword fallback]
+    LLM -->|Valid JSON| Val[validate: normalize types + synonyms]
+    Regex --> Val
 
-    Validate --> Route{Route by Intent}
+    Val --> Route{intent}
 
-    Route -->|Greeting / Help| SysResp[System Response: Greet or Explain Scope]
-    Route -->|Cancel| ClearState[Clear Active State & Confirm Reset]
-    Route -->|None: Out-of-Scope| OOS[Polite Out-of-Scope Fallback]
-    Route -->|None: Billing / Group > 10 / 3x Fail| Handoff[Escalate to Human Agent]
+    Route -->|Greeting / Help| Sys[System reply]
+    Route -->|Cancel| Clear[Clear state]
+    Route -->|Handoff| Human[Escalate to human]
+    Route -->|None| OOS[Out-of-scope fallback]
 
-    Route -->|CheckShowtimes| QueryCatalog[Lookup Movie/Date in catalog.json & List Times]
-    Route -->|CancelBooking| CheckID{Has valid booking_id?}
-    CheckID -->|No| AskID[Prompt for CB-XXXX ID]
-    CheckID -->|Yes| ConfirmCancel[Cancel Reservation & Clear State]
+    Route -->|Confirm, awaiting_confirm=True| Book[Generate CB-XXXX, clear state]
+    Route -->|Deny or any other, awaiting_confirm=True| ClearConfirm[Clear awaiting_confirm, merge correction slots, re-enter flow]
 
-    Route -->|BookTickets| MergeSlots[Merge Extracted Slots into Session State\nSupports multi-slot turns & mid-flow corrections]
-    MergeSlots --> CatalogValid{All provided slots valid\nin catalog.json?}
-    CatalogValid -->|No: Invalid Movie/Time/Format| ClarifyCatalog[Drop invalid slot & list valid options from catalog.json]
-    CatalogValid -->|Yes| MissingCheck{Any required slots missing?\nmovie, date, time, tickets, format}
+    Route -->|CheckShowtimes| Catalog[Look up catalog, list times]
+    Route -->|CancelBooking| CancelID{Has booking_id?}
+    CancelID -->|No| AskID[Ask for CB-XXXX]
+    CancelID -->|Yes| CancelDone[Cancel, clear state]
 
-    MissingCheck -->|Yes| AskMissing[Ask for the FIRST missing required slot]
-    MissingCheck -->|No| AwaitConfirm[Set awaiting_confirmation = True\nSummarize booking & ask: 'Shall I book it?']
-
-    AwaitConfirm --> UserReply([Next User Turn])
-    UserReply -->|'Yes' / Confirm| Complete[Generate Booking ID CB-XXXX\nDisplay Ticket & Clear State]
-    UserReply -->|'No' / Slot Correction| UpdateOrAbort[Update corrected slot OR cancel booking]
+    Route -->|BookTickets| Merge[Merge slots into state]
+    ClearConfirm --> Merge
+    Merge --> Valid{Slots valid?}
+    Valid -->|Invalid movie / format / time| Clarify[Drop invalid slot, list options]
+    Valid -->|All valid| Missing{Any required slot missing?}
+    Missing -->|Yes| Ask[Ask for first missing slot]
+    Missing -->|No| Confirm2[Summarize and ask to confirm]
+    Confirm2 --> Start
 ```
----
 
-## 6. Track Choice and Why
-I chose Track A (LLM Hybrid with gpt-4o-mini and Streamlit) because ticket booking involves messy, multi-slot natural language utterances (e.g., "Can me and my friend see Dune 2 this Friday night in IMAX?") where an LLM excels at zero-shot entity extraction and relative temporal/numeric normalization ("me and my friend" → 2, "Dune 2" → "Dune: Part Two") within a single JSON call. At the same time, keeping catalog validation (catalog.json), state transitions, and confirmation logic strictly in deterministic Python code prevents hallucinations—guaranteeing the bot never sells tickets to a movie or showtime the theater does not actually offer. This hybrid split also gives a clear empirical baseline for Section 5 and Section 7 to test how a pre-trained transformer handles typos, slang, and negations compared to Track B's bag-of-words recognizer.
+## 6. Track choice
+
+I chose Track A (LLM hybrid with gpt-4o-mini and Streamlit) because ticket booking involves messy natural language with multi-slot sentences, colloquial time references, number words, and movie nickname synonyms. The LLM handles all of this in a single extraction call. Catalog validation, state transitions, and confirmation logic stay in deterministic Python, so the bot cannot hallucinate an unavailable showtime. This split also makes the system easy to evaluate quantitatively and compare against Track B's bag-of-words approach in the report.

@@ -8,6 +8,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 from openai import OpenAI
 
+from tools import TOOL_DEFINITIONS, execute_tool, MAX_ITERATIONS
+
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY")) if os.getenv("OPENAI_API_KEY") else None
 MODEL = "gpt-4o-mini"
@@ -77,6 +79,15 @@ User: "I was double charged on my card, I need a refund"
 
 User: "what's the capital of France"
 {{"intent":"None","movie":null,"date":null,"time":null,"tickets":null,"format":null,"booking_id":null}}
+
+User: "hm let's change the movie to Dune instead"
+{{"intent":"Deny","movie":"Dune","date":null,"time":null,"tickets":null,"format":null,"booking_id":null}}
+
+User: "actually I don't want IMAX, just regular seats"
+{{"intent":"Deny","movie":null,"date":null,"time":null,"tickets":null,"format":"standard","booking_id":null}}
+
+User: "switch to Interstellar instead of Oppenheimer"
+{{"intent":"Deny","movie":"Interstellar","date":null,"time":null,"tickets":null,"format":null,"booking_id":null}}
 """
 
 
@@ -262,11 +273,56 @@ def extract_slots_regex(text: str) -> dict:
     return out
 
 
+def run_tool_agent(text: str, history: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Agentic loop (lab-05 pattern): LLM may call check_availability() before extraction.
+    Returns (updated_history_with_tool_results, tool_call_log)."""
+    tool_log = []
+    messages = [{"role": "system", "content":
+                 "You are a cinema assistant. Use check_availability to look up showtimes "
+                 "or prices when the user asks about them. Return plain text to the user."}]
+    messages += history[-6:]  # short context window for the tool agent
+    messages.append({"role": "user", "content": text})
+
+    for _ in range(MAX_ITERATIONS):
+        resp = client.chat.completions.create(
+            model=MODEL,
+            messages=messages,
+            tools=TOOL_DEFINITIONS,
+            tool_choice="auto",
+        )
+        msg = resp.choices[0].message
+        assistant_entry = {"role": "assistant", "content": msg.content or ""}
+        if msg.tool_calls:
+            assistant_entry["tool_calls"] = [
+                {"id": tc.id, "type": "function",
+                 "function": {"name": tc.function.name, "arguments": tc.function.arguments}}
+                for tc in msg.tool_calls
+            ]
+        messages.append(assistant_entry)
+
+        if not msg.tool_calls:
+            break  # model gave a final text answer — done
+
+        for tc in msg.tool_calls:
+            result = execute_tool(tc.function.name, json.loads(tc.function.arguments))
+            tool_log.append({"tool": tc.function.name,
+                             "input": json.loads(tc.function.arguments),
+                             "result": json.loads(result)})
+            messages.append({"role": "tool", "tool_call_id": tc.id, "content": result})
+
+    return messages, tool_log
+
+
 def extract(text: str, history: list[dict]) -> tuple[dict, str]:
     """Returns (slots_dict, source) where source is 'LLM' or 'regex'."""
     if client:
         try:
-            return extract_slots_llm(text, history), "LLM"
+            # run tool agent first so check_availability results are in history
+            updated_history, tool_log = run_tool_agent(text, history)
+            slots = extract_slots_llm(text, updated_history)
+            if tool_log:
+                slots["_tool_log"] = tool_log
+            return slots, "LLM"
         except Exception:
             pass
     return extract_slots_regex(text), "regex"

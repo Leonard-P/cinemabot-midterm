@@ -149,28 +149,17 @@ def process_turn(state: dict, slots: dict) -> str:
                 "- **Cancel a booking** — share your CB-XXXX reference\n"
                 "- Say \"cancel\" at any point to start over")
 
-    # confirmation flow — only active when awaiting_confirm is True
+    # confirmation flow
     if state["awaiting_confirm"]:
         if intent == "Confirm":
             ref = _booking_id()
             summary = _summary(state)
             state.update(new_state())
             return f"Booked! Reference: **{ref}**\n{summary}\n\nEnjoy the film!"
-        if intent == "Deny":
-            # Deny can carry slot corrections (e.g. "no, make it Saturday")
-            state["awaiting_confirm"] = False
-            err = _merge_slots(state, slots)
-            if err == "HANDOFF":
-                state.update(new_state())
-                return ("Groups over 10 need our group sales team. "
-                        "Call (555) 246-8101.")
-            if err:
-                return err
-            # fall through to BookTickets slot filling below
-            state["task"] = "BookTickets"
-        else:
-            # user sent a new task or out-of-scope — treat as implicit cancel of confirmation
-            state["awaiting_confirm"] = False
+        # anything else (Deny, BookTickets with new slots, etc.) clears confirmation
+        # and falls through so the shared merge+route path handles the correction
+        state["awaiting_confirm"] = False
+        state["task"] = "BookTickets"  # keep the active task
 
     # set task from detected intent (task intents only)
     if intent in ("BookTickets", "CheckShowtimes", "CancelBooking"):
