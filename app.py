@@ -159,7 +159,10 @@ with footer_container:
                 if transcript:
                     handle_input(transcript, voice_latency=stt_latency)
                 else:
-                    st.warning("That recording was too short. Please record at least a moment of speech.")
+                    st.warning(
+                        "No clear speech was detected. Please hold the microphone "
+                        "closer and record a complete sentence."
+                    )
                     st.rerun()
     else:
         status_slot = st.empty()
