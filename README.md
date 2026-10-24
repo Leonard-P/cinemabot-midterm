@@ -1,16 +1,31 @@
-# README.md — CineBot
+# CineBot
 
-CineBot is a cinema ticket assistant built for STAT 5350/4350 midterm using Track A (LLM hybrid). It runs on Streamlit with gpt-4o-mini handling slot extraction, while Python manages state and catalog validation.
+This is a cinema ticket assistant. We built it as midterm for STAT 5350. It is a Track A (LLM hybrid) via Streamlit and gpt-4o-mini. LLM handles slot extraction, Python manages state and catalog validation.
 
 ## Setup
 
 ```bash
-# activate the shared venv from the project root
-source ../../university/bin/activate
+# create an isolated environment for this project
+python3 -m venv .venv
+source .venv/bin/activate
 
-# copy the sample env and add your key
+# install the application, voice, and evaluation dependencies
+python -m pip install --upgrade pip
+python -m pip install -r 5350-chatbot/requirements.txt
+# The microphone button is provided by streamlit-mic-recorder.
+python -m pip install "streamlit-mic-recorder>=0.0.8"
+python -m pip install scikit-learn matplotlib
+
+# copy the sample environment file and add your key
 cp 5350-chatbot/.env.sample .env
 # edit .env and set OPENAI_API_KEY=sk-...
+```
+
+The commands above create `.venv/` inside this project; no shared or
+personal virtual environment is required. On Windows, activate it with:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
 ```
 
 The `.env` file must be in the `midterm/` directory (next to `app.py`).
@@ -18,7 +33,7 @@ The `.env` file must be in the `midterm/` directory (next to `app.py`).
 ## Run the bot
 
 ```bash
-streamlit run app.py
+python -m streamlit run app.py
 ```
 
 Opens at http://localhost:8501. The sidebar shows intent, slots, and dialog state for each turn.
@@ -37,10 +52,24 @@ Results print to stdout. `eval/results/confusion_matrix.png` is saved when sklea
 
 ## Dependencies
 
-All dependencies come from `5350-chatbot/requirements.txt`. If sklearn and matplotlib are not installed:
+The setup installs the following packages:
+
+- `openai` — OpenAI API client for extraction and tools
+- `streamlit` — web application UI
+- `python-dotenv` — loads `OPENAI_API_KEY` from `.env`
+- `streamlit-mic-recorder` — manual start and stop voice input
+- `streamlit-float` — voice UI support
+- `pytest` and `hypothesis` — test dependencies from the course bundle
+- `scikit-learn` and `matplotlib` — evaluation metrics and confusion matrix
+
+The core, voice, and test packages are declared in
+`5350-chatbot/requirements.txt`. The evaluation packages are installed
+explicitly above because `eval/evaluate.py` uses them when available.
+The microphone package must be installed in the same environment used to
+start Streamlit. Verify it with:
 
 ```bash
-pip install scikit-learn matplotlib
+python -c "import streamlit_mic_recorder; print(streamlit_mic_recorder.__file__)"
 ```
 
 ## Project structure

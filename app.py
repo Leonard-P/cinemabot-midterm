@@ -1,6 +1,7 @@
 # app.py — CineBot: Cinema Ticket & Showtime Assistant
 import os
 import time
+import hashlib
 
 import streamlit as st
 from dotenv import load_dotenv
@@ -12,11 +13,14 @@ load_dotenv()
 
 # voice is optional — only imported when the packages are installed
 try:
-    from audio_recorder_streamlit import audio_recorder
+    from streamlit_mic_recorder import mic_recorder
     from voice import speech_to_text, text_to_speech, autoplay_audio
     VOICE_OK = True
-except ImportError:
+except ImportError as exc:
     VOICE_OK = False
+    VOICE_ERROR = f"{type(exc).__name__}: {exc}"
+else:
+    VOICE_ERROR = None
 
 st.set_page_config(page_title="CineBot", page_icon="🎬", layout="wide")
 st.title("🎬 CineBot — Cinema Ticket Assistant")
@@ -29,6 +33,10 @@ if "messages" not in st.session_state:
     ]
     st.session_state.dialog = new_state()
     st.session_state.debug = {}
+st.session_state.setdefault("processed_audio_digest", None)
+st.session_state.setdefault("voice_recorder_key", 0)
+st.session_state.setdefault("voice_enabled", False)
+st.session_state.setdefault("pending_audio", None)
 
 # sidebar debug panel (R9)
 with st.sidebar:
@@ -61,29 +69,32 @@ with st.sidebar:
         del st.session_state["messages"]
         st.rerun()
 
-# chat history
-for m in st.session_state.messages:
-    with st.chat_message(m["role"]):
-        st.markdown(m["content"])
-
-
 def handle_input(user_text: str, voice_latency: float | None = None):
     st.session_state.messages.append({"role": "user", "content": user_text})
+    with st.chat_message("user"):
+        st.markdown(user_text)
 
     history = [msg for msg in st.session_state.messages if msg["role"] != "system"]
 
-    t0 = time.time()
-    slots, source = extract(user_text, history)
-    latency = time.time() - t0
+    with st.chat_message("assistant"):
+        with st.spinner("Thinking..."):
+            t0 = time.time()
+            slots, source = extract(user_text, history)
+            latency = time.time() - t0
+            reply = process_turn(st.session_state.dialog, slots)
+            st.markdown(reply)
 
-    reply = process_turn(st.session_state.dialog, slots)
-
-    # voice output — speak the reply if input came from mic
+    # Voice output speaks replies to voice messages. The text reply is already
+    # available even if the optional TTS request fails.
     if voice_latency is not None and VOICE_OK:
         t1 = time.time()
-        audio = text_to_speech(reply)
-        voice_latency += time.time() - t1
-        autoplay_audio(audio)
+        try:
+            audio = text_to_speech(reply)
+        except RuntimeError as exc:
+            st.warning(f"Voice reply unavailable: {exc}")
+        else:
+            voice_latency += time.time() - t1
+            st.session_state.pending_audio = audio
 
     st.session_state.debug = {
         **slots,
@@ -95,21 +106,47 @@ def handle_input(user_text: str, voice_latency: float | None = None):
     st.rerun()
 
 
-# voice input
-if VOICE_OK:
-    st.markdown("---")
-    st.caption("Speak or type:")
-    audio_bytes = audio_recorder(pause_threshold=2.0, sample_rate=16000)
-    if audio_bytes:
-        with st.spinner("Transcribing..."):
-            t0 = time.time()
-            transcript = speech_to_text(audio_bytes)
-            stt_latency = time.time() - t0
-        if transcript:
-            with st.chat_message("user"):
-                st.markdown(f"🎤 {transcript}")
-            handle_input(transcript, voice_latency=stt_latency)
+# chat history
+for m in st.session_state.messages:
+    with st.chat_message(m["role"]):
+        st.markdown(m["content"])
 
-# text input
+if st.session_state.pending_audio is not None:
+    autoplay_audio(st.session_state.pending_audio)
+    st.session_state.pending_audio = None
+
+# Voice input is kept directly above the text prompt so both input methods
+# remain together at the bottom of the conversation.
+if VOICE_OK:
+    if not st.session_state.voice_enabled:
+        if st.button("Enable microphone", use_container_width=True):
+            st.session_state.voice_enabled = True
+            st.rerun()
+    else:
+        recording = mic_recorder(
+            start_prompt="🎙️ Record",
+            stop_prompt="⏹️ Stop",
+            just_once=True,
+            use_container_width=True,
+            format="wav",
+            key=f"cinebot-recorder-{st.session_state.voice_recorder_key}",
+        )
+        audio_bytes = recording.get("bytes") if recording else None
+        digest = hashlib.sha256(audio_bytes).hexdigest() if audio_bytes else None
+        if audio_bytes and digest != st.session_state.processed_audio_digest:
+            st.session_state.processed_audio_digest = digest
+            st.session_state.voice_recorder_key += 1
+            with st.spinner("Transcribing..."):
+                t0 = time.time()
+                transcript = speech_to_text(audio_bytes)
+                stt_latency = time.time() - t0
+            if transcript:
+                handle_input(transcript, voice_latency=stt_latency)
+            else:
+                st.warning("That recording was too short. Please record at least a moment of speech.")
+                st.rerun()
+else:
+    st.warning(f"Microphone unavailable: {VOICE_ERROR}")
+
 if user_text := st.chat_input("e.g. Two IMAX tickets for Dune this Friday at 8pm"):
     handle_input(user_text)

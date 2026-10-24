@@ -103,6 +103,13 @@ def _merge_slots(state: dict, slots: dict) -> str | None:
         if slots.get(key) is not None:
             state[key] = slots[key]
 
+    # Standard is the catalog default. Set it before asking for a showtime so
+    # the available times come from a real format instead of None.
+    if state["movie"] and state["format"] is None:
+        movie_formats = _movie(state["movie"])["formats"]
+        if "Standard" in movie_formats:
+            state["format"] = "Standard"
+
     return None
 
 
@@ -121,6 +128,28 @@ def _ask_next(state: dict) -> str:
         return SLOT_QUESTIONS["time"].format(
             movie=state["movie"], format=state["format"], times=times or "none listed")
     return SLOT_QUESTIONS[slot]
+
+
+def _filled_slot_message(state: dict, previous: dict) -> str | None:
+    newly_filled = [
+        slot for slot in REQUIRED_SLOTS
+        if state[slot] is not None and state[slot] != previous[slot]
+    ]
+    if not newly_filled:
+        return None
+
+    labels = {
+        "movie": "movie",
+        "date": "date",
+        "time": "showtime",
+        "tickets": "ticket count",
+        "format": "format",
+    }
+    values = [
+        f"**{labels[slot]}:** {state[slot]}"
+        for slot in newly_filled
+    ]
+    return "Got it — " + ", ".join(values) + "."
 
 
 def process_turn(state: dict, slots: dict) -> str:
@@ -165,6 +194,20 @@ def process_turn(state: dict, slots: dict) -> str:
     if intent in ("BookTickets", "CheckShowtimes", "CancelBooking"):
         state["task"] = intent
 
+    # A concise slot answer can have no explicit intent. Treat validated
+    # booking fields as a continuation/start of the booking flow.
+    if (
+        state["task"] is None
+        and intent == "None"
+        and any(slots.get(slot) is not None
+                for slot in ("movie", "date", "time", "tickets", "format"))
+    ):
+        state["task"] = "BookTickets"
+
+    # Keep a snapshot so the response can acknowledge only slots accepted
+    # during this turn.
+    previous = {slot: state[slot] for slot in REQUIRED_SLOTS}
+
     # merge slots regardless of current task (corrections work mid-flow)
     err = _merge_slots(state, slots)
     if err == "HANDOFF":
@@ -179,7 +222,9 @@ def process_turn(state: dict, slots: dict) -> str:
     if state["task"] == "BookTickets":
         missing = _missing(state)
         if missing:
-            return _ask_next(state)
+            next_prompt = _ask_next(state)
+            acknowledgement = _filled_slot_message(state, previous)
+            return f"{acknowledgement}\n\n{next_prompt}" if acknowledgement else next_prompt
         # re-check time validity now that all slots are present
         if not _valid_showtime(state["movie"], state["format"], state["time"]):
             times = ", ".join(_showtimes(state["movie"], state["format"]))

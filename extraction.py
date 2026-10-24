@@ -2,7 +2,7 @@
 import json
 import os
 import re
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -55,6 +55,10 @@ For every user message, return a single JSON object with these keys:
 Rules:
 - Return ONLY the JSON object, no other text.
 - Use null for slots the user didn't mention.
+- If the user is answering the previous assistant question with a single
+  movie name or ticket count, put it in the matching slot. For example,
+  "Dune" answers "What movie would you like to see?" and "Two" answers
+  "How many tickets?".
 - Extract raw values; do not resolve dates or convert numbers — Python handles that.
 - Today's date is {TODAY.isoformat()}.
 
@@ -113,6 +117,14 @@ def _resolve_date(raw: str) -> str | None:
             return (TODAY + timedelta(days=delta)).isoformat()
     if re.match(r"\d{4}-\d{2}-\d{2}", raw):
         return raw
+    for fmt in ("%b %d", "%B %d", "%b %d %Y", "%B %d %Y",
+                "%b %d, %Y", "%B %d, %Y"):
+        try:
+            parsed = datetime.strptime(t, fmt)
+            year = parsed.year if parsed.year != 1900 else TODAY.year
+            return date(year, parsed.month, parsed.day).isoformat()
+        except ValueError:
+            continue
     return None
 
 
@@ -197,6 +209,38 @@ def validate(data: dict) -> dict:
     return out
 
 
+def _apply_contextual_single_slot(
+    result: dict, text: str, history: list[dict]
+) -> dict:
+    """Recover concise answers when the model does not infer the slot from context."""
+    normalized = text.strip().strip(" .,!?").lower()
+    if not normalized:
+        return result
+
+    last_assistant = next(
+        (message.get("content", "").lower()
+         for message in reversed(history)
+         if message.get("role") == "assistant"),
+        "",
+    )
+    movie = _resolve_movie(normalized)
+    ticket_count = _resolve_tickets(normalized)
+
+    if movie and "what movie" in last_assistant:
+        result["movie"] = movie
+        if result["intent"] == "None":
+            result["intent"] = "BookTickets"
+    elif ticket_count is not None and re.fullmatch(
+        r"(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)",
+        normalized,
+    ) and "how many tickets" in last_assistant:
+        result["tickets"] = ticket_count
+        if result["intent"] == "None":
+            result["intent"] = "BookTickets"
+
+    return result
+
+
 def extract_slots_llm(text: str, history: list[dict]) -> dict:
     # trim to last 10 turns so the system prompt is never squeezed out (A6)
     trimmed = history[-10:]
@@ -209,7 +253,7 @@ def extract_slots_llm(text: str, history: list[dict]) -> dict:
         messages=messages,
     )
     raw = json.loads(resp.choices[0].message.content)
-    result = validate(raw)
+    result = _apply_contextual_single_slot(validate(raw), text, history)
     result["_tokens"] = {
         "prompt": resp.usage.prompt_tokens,
         "completion": resp.usage.completion_tokens,
@@ -217,7 +261,7 @@ def extract_slots_llm(text: str, history: list[dict]) -> dict:
     return result
 
 
-def extract_slots_regex(text: str) -> dict:
+def extract_slots_regex(text: str, history: list[dict] | None = None) -> dict:
     """Fallback when the API is down — basic keyword + regex, never crashes (A4)."""
     t = text.lower()
     out = {"intent": "None", "movie": None, "date": None, "time": None,
@@ -270,6 +314,8 @@ def extract_slots_regex(text: str) -> dict:
     if m := re.search(r"\bCB-\d{4}\b", text, re.IGNORECASE):
         out["booking_id"] = m.group(0).upper()
 
+    if history:
+        out = _apply_contextual_single_slot(out, text, history)
     return out
 
 
@@ -325,4 +371,4 @@ def extract(text: str, history: list[dict]) -> tuple[dict, str]:
             return slots, "LLM"
         except Exception:
             pass
-    return extract_slots_regex(text), "regex"
+    return extract_slots_regex(text, history), "regex"
