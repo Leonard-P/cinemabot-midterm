@@ -271,6 +271,24 @@ def extract_slots_llm(text: str, history: list[dict]) -> dict:
     return result
 
 
+def _is_booking_confirmation(text: str, history: list[dict]) -> bool:
+    """Recognize an exact confirmation reply without spending an LLM call."""
+    last_assistant = next(
+        (message.get("content", "").lower()
+         for message in reversed(history)
+         if message.get("role") == "assistant"),
+        "",
+    )
+    if "shall i book it" not in last_assistant:
+        return False
+
+    normalized = re.sub(r"[^a-z\s]", "", text.lower()).strip()
+    return normalized in {
+        "yes", "yeah", "yep", "yup", "confirm", "confirmed",
+        "book it", "go ahead", "please do", "that works", "looks good",
+    }
+
+
 def extract_slots_regex(text: str, history: list[dict] | None = None) -> dict:
     """Fallback when the API is down — basic keyword + regex, never crashes (A4)."""
     t = text.lower()
@@ -371,6 +389,17 @@ def run_tool_agent(text: str, history: list[dict]) -> tuple[list[dict], list[dic
 
 def extract(text: str, history: list[dict]) -> tuple[dict, str]:
     """Returns (slots_dict, source) where source is 'LLM' or 'regex'."""
+    if _is_booking_confirmation(text, history):
+        return {
+            "intent": "Confirm",
+            "movie": None,
+            "date": None,
+            "time": None,
+            "tickets": None,
+            "format": None,
+            "booking_id": None,
+        }, "local"
+
     if client:
         try:
             # run tool agent first so check_availability results are in history

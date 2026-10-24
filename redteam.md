@@ -1,4 +1,4 @@
-# redteam.md — adversarial test cases for CineBot
+# Adversarial test cases for CineBot
 
 These are adversarial inputs run against the deployed bot to test robustness. Each case records what was sent, what we expected, what actually happened, and whether it passed.
 
