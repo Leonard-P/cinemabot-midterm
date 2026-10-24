@@ -1,5 +1,6 @@
 openai>=1.40
 streamlit>=1.37
+streamlit-float>=0.1.0
 python-dotenv>=1.0
 streamlit-mic-recorder>=0.0.8
 streamlit-float

@@ -1,6 +1,7 @@
 # voice.py — speech-to-text and text-to-speech helpers, from lab-06 pattern
 from io import BytesIO
 import os
+from array import array
 import tempfile
 import wave
 
@@ -15,6 +16,20 @@ def _client() -> OpenAI:
     return OpenAI(api_key=api_key)
 
 
+def _has_speech_energy(wav: wave.Wave_read) -> bool:
+    """Reject silent recorder payloads that Whisper may hallucinate from."""
+    if wav.getsampwidth() != 2:
+        return True
+    samples = array("h", wav.readframes(wav.getnframes()))
+    if not samples:
+        return False
+    if wav.getnchannels() > 1:
+        samples = samples[::wav.getnchannels()]
+    peak = max(abs(sample) for sample in samples)
+    rms = (sum(sample * sample for sample in samples) / len(samples)) ** 0.5
+    return peak >= 600 and rms >= 120
+
+
 def speech_to_text(audio_bytes: bytes) -> str | None:
     if not audio_bytes:
         return None
@@ -24,9 +39,10 @@ def speech_to_text(audio_bytes: bytes) -> str | None:
     try:
         with wave.open(BytesIO(audio_bytes), "rb") as wav:
             duration = wav.getnframes() / wav.getframerate()
+            has_speech_energy = _has_speech_energy(wav)
     except (wave.Error, EOFError, ZeroDivisionError):
         return None
-    if duration < 0.1:
+    if duration < 0.3 or not has_speech_energy:
         return None
 
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
