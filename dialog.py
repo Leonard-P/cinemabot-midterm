@@ -7,7 +7,7 @@ from pathlib import Path
 
 CATALOG = json.loads((Path(__file__).parent / "catalog.json").read_text())
 
-REQUIRED_SLOTS = ["movie", "date", "time", "tickets", "format"]
+REQUIRED_SLOTS = ["movie", "date", "format", "time", "tickets"]
 
 SLOT_QUESTIONS = {
     "movie":   "What movie would you like to see? We're showing: {movies}.",
@@ -102,13 +102,6 @@ def _merge_slots(state: dict, slots: dict) -> str | None:
     for key in ("date", "booking_id"):
         if slots.get(key) is not None:
             state[key] = slots[key]
-
-    # Standard is the catalog default. Set it before asking for a showtime so
-    # the available times come from a real format instead of None.
-    if state["movie"] and state["format"] is None:
-        movie_formats = _movie(state["movie"])["formats"]
-        if "Standard" in movie_formats:
-            state["format"] = "Standard"
 
     return None
 

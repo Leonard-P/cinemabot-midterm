@@ -225,6 +225,16 @@ def _apply_contextual_single_slot(
     )
     movie = _resolve_movie(normalized)
     ticket_count = _resolve_tickets(normalized)
+    asks_for_time = "what time" in last_assistant or "what showtime" in last_assistant
+
+    # A bare number is a time when the previous prompt asks for a showtime.
+    # Keep it out of the ticket slot so values such as "20" become 20:00.
+    if asks_for_time and re.fullmatch(r"(?:[01]?\d|2[0-3])", normalized):
+        result["time"] = _resolve_time(f"{normalized}:00")
+        result["tickets"] = None
+        if result["intent"] == "None":
+            result["intent"] = "BookTickets"
+        return result
 
     if movie and "what movie" in last_assistant:
         result["movie"] = movie

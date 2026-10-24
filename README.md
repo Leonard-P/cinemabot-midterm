@@ -60,7 +60,7 @@ The setup installs the following packages:
 - `scikit-learn` and `matplotlib` — evaluation metrics and confusion matrix
 
 The core, voice, test, and evaluation packages are declared in
-`5350-chatbot/requirements.txt`.
+`requirements.txt`.
 The microphone package must be installed in the same environment used to
 start Streamlit. Verify it with:
 

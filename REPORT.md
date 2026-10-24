@@ -1,4 +1,4 @@
-# CineBot Midterm Report
+# Report
 
 ## 1. Summary
 
@@ -19,7 +19,18 @@ Catalog values are checked against catalog.json. Invalid values are removed. A r
 dialog.py stores the current task and accepted slots. It asks for the first missing slot and shows a summary before it creates a mock reference.
 
 ### Tool call
-The model can call check_availability through tools.py. Only the allow-listed function can run.
+
+The Track A agent supports the tool-call bonus from the requirements. When a
+user asks about availability or pricing, the model can request
+`check_availability` through tools.py. The function resolves movie synonyms,
+checks the catalog, and returns showtimes, format, price per ticket, and date.
+The result is sent back to the model before it gives the user a reply.
+
+Python executes the request through an allow-list containing only
+`check_availability`. Unknown function names return a rejection instead of
+running. The agent loop is capped at five iterations. Tool name, input, and
+result are stored in the sidebar debug view. This provides an auditable path
+for the catalog lookup and supports the Track A tool-call bonus.
 
 ### Flow Chart
 ```mermaid
@@ -35,7 +46,17 @@ flowchart LR
     E --> I[Voice TTS]
 ```
 
-The voice path uses a manual start and stop recorder for input. Whisper converts audio to text -> the normal extraction path handles the text -> the tts-1 model reads the reply aloud.
+The voice path uses a manual start and stop recorder for input. Whisper
+converts audio to text. The normal extraction path handles the text. The
+tts-1 model reads the reply aloud. The recorder uses
+`streamlit-mic-recorder`, and duplicate audio IDs are ignored.
+
+Voice latency is measured from the completed recording through transcription
+and text-to-speech. The sidebar shows extraction latency separately and shows
+the combined speech latency for each voice turn. In the latest validation
+run, average extraction latency was 2.55 seconds per turn. The evaluator also
+reports average prompt tokens, completion tokens, and three-run consistency,
+as required for Track A.
 
 ## 3. Baseline results
 
@@ -154,9 +175,16 @@ The next version should add live inventory, stronger date support, better typo m
 
 ## 10. Bonus features
 
-The tool path uses check_availability in tools.py. It returns showtimes and prices from catalog.json. The sidebar shows the tool name, input, and result.
+- Tool call: `check_availability` uses an allow-listed Python dispatcher and
+  returns showtimes and prices from catalog.json.
+- Voice mode: Whisper provides speech to text and tts-1 with the Nova voice
+  provides speech output.
+- Voice timing: the sidebar reports extraction latency and combined voice
+  latency. Duplicate audio results are ignored.
 
-The voice path uses Whisper for speech to text and tts-1 with the Nova voice for speech output. The app labels the recorder state and prevents duplicate audio results. Voice latency and text extraction latency appear in the sidebar.
+These implement the two Track A bonus items in the requirements. The tool
+call is worth up to +5 and voice mode with latency reporting is worth up to
++3. The project does not claim the separate Track B bonuses.
 
 ## 11. AI assistance statement
 

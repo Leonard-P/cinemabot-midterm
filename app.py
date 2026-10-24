@@ -14,6 +14,7 @@ load_dotenv()
 # voice is optional — only imported when the packages are installed
 try:
     from streamlit_mic_recorder import mic_recorder
+    from streamlit_float import float_init
     from voice import speech_to_text, text_to_speech, autoplay_audio
     VOICE_OK = True
 except ImportError as exc:
@@ -24,6 +25,8 @@ else:
 
 st.set_page_config(page_title="CineBot", page_icon="🎬", layout="wide")
 st.title("🎬 CineBot — Cinema Ticket Assistant")
+if VOICE_OK:
+    float_init()
 
 if "messages" not in st.session_state:
     st.session_state.messages = [
@@ -37,6 +40,7 @@ st.session_state.setdefault("processed_audio_digest", None)
 st.session_state.setdefault("voice_recorder_key", 0)
 st.session_state.setdefault("voice_enabled", False)
 st.session_state.setdefault("pending_audio", None)
+st.session_state.setdefault("tts_generating", False)
 
 # sidebar debug panel (R9)
 with st.sidebar:
@@ -71,28 +75,35 @@ with st.sidebar:
 
 def handle_input(user_text: str, voice_latency: float | None = None):
     st.session_state.messages.append({"role": "user", "content": user_text})
-    with st.chat_message("user"):
-        st.markdown(user_text)
+    # Render the new message in the transcript before the blocking model call.
+    # The next rerun renders it from session state, so it is not duplicated.
+    with transcript_tail:
+        with st.chat_message("user"):
+            st.markdown(user_text)
 
     history = [msg for msg in st.session_state.messages if msg["role"] != "system"]
 
-    with st.chat_message("assistant"):
+    with status_slot:
         with st.spinner("Thinking..."):
             t0 = time.time()
             slots, source = extract(user_text, history)
             latency = time.time() - t0
             reply = process_turn(st.session_state.dialog, slots)
-            st.markdown(reply)
 
     # Voice output speaks replies to voice messages. The text reply is already
     # available even if the optional TTS request fails.
     if voice_latency is not None and VOICE_OK:
         t1 = time.time()
-        try:
-            audio = text_to_speech(reply)
-        except RuntimeError as exc:
-            st.warning(f"Voice reply unavailable: {exc}")
-        else:
+        st.session_state.tts_generating = True
+        with status_slot:
+            with st.spinner("Generating voice reply..."):
+                try:
+                    audio = text_to_speech(reply)
+                except RuntimeError as exc:
+                    st.warning(f"Voice reply unavailable: {exc}")
+                    audio = None
+        st.session_state.tts_generating = False
+        if audio is not None:
             voice_latency += time.time() - t1
             st.session_state.pending_audio = audio
 
@@ -111,42 +122,63 @@ for m in st.session_state.messages:
     with st.chat_message(m["role"]):
         st.markdown(m["content"])
 
-if st.session_state.pending_audio is not None:
-    autoplay_audio(st.session_state.pending_audio)
-    st.session_state.pending_audio = None
+# Reserve the transcript position before the fixed footer. Submitted messages
+# render here even though the input callback runs after the footer is created.
+transcript_tail = st.container()
 
-# Voice input is kept directly above the text prompt so both input methods
-# remain together at the bottom of the conversation.
-if VOICE_OK:
-    if not st.session_state.voice_enabled:
-        if st.button("Enable microphone", use_container_width=True):
-            st.session_state.voice_enabled = True
-            st.rerun()
-    else:
-        recording = mic_recorder(
-            start_prompt="🎙️ Record",
-            stop_prompt="⏹️ Stop",
-            just_once=True,
-            use_container_width=True,
-            format="wav",
-            key=f"cinebot-recorder-{st.session_state.voice_recorder_key}",
-        )
-        audio_bytes = recording.get("bytes") if recording else None
-        digest = hashlib.sha256(audio_bytes).hexdigest() if audio_bytes else None
-        if audio_bytes and digest != st.session_state.processed_audio_digest:
-            st.session_state.processed_audio_digest = digest
-            st.session_state.voice_recorder_key += 1
-            with st.spinner("Transcribing..."):
-                t0 = time.time()
-                transcript = speech_to_text(audio_bytes)
-                stt_latency = time.time() - t0
-            if transcript:
-                handle_input(transcript, voice_latency=stt_latency)
-            else:
-                st.warning("That recording was too short. Please record at least a moment of speech.")
+# Keep all transient input and voice UI in one fixed footer. The footer is
+# rendered independently from the transcript, so the chat input cannot move
+# below a newly rendered message during a blocking request.
+footer_container = st.container()
+with footer_container:
+    if VOICE_OK:
+        if not st.session_state.voice_enabled:
+            if st.button("Enable microphone", use_container_width=True):
+                st.session_state.voice_enabled = True
                 st.rerun()
-else:
-    st.warning(f"Microphone unavailable: {VOICE_ERROR}")
+            status_slot = st.empty()
+        else:
+            recording = mic_recorder(
+                start_prompt="🎙️ Record",
+                stop_prompt="⏹️ Stop",
+                just_once=True,
+                use_container_width=True,
+                format="wav",
+                key=f"cinebot-recorder-{st.session_state.voice_recorder_key}",
+            )
+            status_slot = st.empty()
+            audio_bytes = recording.get("bytes") if recording else None
+            digest = hashlib.sha256(audio_bytes).hexdigest() if audio_bytes else None
+            if audio_bytes and digest != st.session_state.processed_audio_digest:
+                st.session_state.processed_audio_digest = digest
+                st.session_state.voice_recorder_key += 1
+                with st.spinner("Transcribing..."):
+                    t0 = time.time()
+                    transcript = speech_to_text(audio_bytes)
+                    stt_latency = time.time() - t0
+                if transcript:
+                    handle_input(transcript, voice_latency=stt_latency)
+                else:
+                    st.warning("That recording was too short. Please record at least a moment of speech.")
+                    st.rerun()
+    else:
+        status_slot = st.empty()
+        st.warning(f"Microphone unavailable: {VOICE_ERROR}")
 
-if user_text := st.chat_input("e.g. Two IMAX tickets for Dune this Friday at 8pm"):
-    handle_input(user_text)
+    if st.session_state.pending_audio is not None:
+        autoplay_audio(st.session_state.pending_audio)
+        st.session_state.pending_audio = None
+    elif st.session_state.tts_generating:
+        with status_slot:
+            st.info("Generating voice reply...")
+
+    if user_text := st.chat_input("e.g. Two IMAX tickets for Dune this Friday at 8pm"):
+        handle_input(user_text)
+
+if VOICE_OK:
+    footer_container.float(
+        "bottom: 0rem; left: 21rem; right: 0.5rem; width: auto; "
+        "box-sizing: border-box; overflow-x: hidden; z-index: 999; "
+        "background-color: var(--background-color); "
+        "padding: 0.5rem 0.5rem 1rem;"
+    )

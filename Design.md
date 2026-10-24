@@ -4,7 +4,7 @@
 
 CineBot helps a small theater reduce calls to the front desk.
 
-- Order target: five turns or fewer for at least 85 percent of valid requests.
+- SMART goal: five turns or fewer for at least 85 percent of valid requests.
 - Slot F1 target: 90 percent.
 - Out of scope rejection target: 90 percent.
 
@@ -12,7 +12,7 @@ CineBot helps a small theater reduce calls to the front desk.
 
 CineBot supports three tasks.
 
-- BookTickets collects a movie, date, showtime, ticket count, and format. It checks catalog.json. It asks for confirmation. It returns a mock reference.
+- BookTickets collects a movie, date, showtime, ticket count, and format. It checks catalog.json. It asks for confirmation, then returns a mock reference.
 - CheckShowtimes lists showtimes and formats for a movie or date.
 - CancelBooking cancels a reservation with a reference such as CB-4829.
 
@@ -88,7 +88,21 @@ flowchart TD
     D --> K[Handoff when required]
 ```
 
-## 6. Track choice
+## 6. Tool and voice support for Extra Credit :)
+
+The Track A agent can call `check_availability` when a user asks about
+showtimes or prices. The function reads catalog.json and returns the movie,
+format, showtimes, price, and date. Python runs the call through the
+allow-list in tools.py. Unknown tool names are rejected. The agent allows at
+most five tool iterations.
+
+We created our own start and stop controls for voice mode with `streamlit-mic-recorder` so it is easier to use.
+Whisper converts the recording to text. The normal extraction and dialog flow
+then handles it. The reply is sent to tts-1 and played in the browser. The
+sidebar reports extraction latency and the combined voice latency for each
+voice turn.
+
+## 7. Track choice
 
 Track A fits this task because users can give several values in one sentence. They can use nicknames, number words, abbreviations, and informal time phrases.
 
