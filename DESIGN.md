@@ -63,7 +63,7 @@ Greeting answers a hello. Help lists the bot services. Cancel clears the active 
 - Python checks the values against the catalog.
 - The regex fallback runs after a model error.
 - Dialog state stores accepted slots.
-- The bot confirms each accepted slot and asks for the next one.
+- The bot confirms each accepted slot and asks for the next missing slot.
 - The bot drops invalid values and repeats the same question.
 - The bot shows a summary when all booking slots are valid.
 - The bot creates a mock reference after confirmation.
@@ -91,19 +91,23 @@ flowchart TD
 ## 6. Tool and voice support for Extra Credit :)
 
 The Track A agent can call `check_availability` when a user asks about
-showtimes or prices. The function reads catalog.json and returns the movie,
-format, showtimes, price, and date. Python runs the call through the
+showtimes or prices. The function reads catalog.json and returns the
+movie, format, showtimes, price, and date. Python runs the call through the
 allow-list in tools.py. Unknown tool names are rejected. The agent allows at
 most five tool iterations.
 
-We created our own start and stop controls for voice mode with `streamlit-mic-recorder` so it is easier to use.
-Whisper converts the recording to text. The normal extraction and dialog flow
-then handles it. The reply is sent to tts-1 and played in the browser. The
-sidebar reports extraction latency and the combined voice latency for each
-voice turn.
+We created our own start and stop controls for voice mode with
+`streamlit-mic-recorder` so it is easier to use. Whisper converts the
+recording to text. The normal extraction and dialog flow then handles it.
+The reply is sent to tts-1 and played in the browser. The sidebar reports
+extraction latency and the combined voice latency for each voice turn.
 
 ## 7. Track choice
 
-Track A fits this task because users can give several values in one sentence. They can use nicknames, number words, abbreviations, and informal time phrases.
+Track A fits this task because users can give several values in one sentence.
+They can use nicknames, number words, abbreviations, and informal time
+phrases.
 
-The model extracts the values. Python checks the values and controls the state. This split limits false showtimes and prevents a model reply from completing an order without confirmation.
+The model extracts the values. Python checks the values and controls the
+state. This split limits false showtimes and prevents a model reply from
+completing an order without confirmation.

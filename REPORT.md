@@ -100,28 +100,35 @@ The latest validation check reported:
 The evaluator also saves an intent confusion matrix and supports three
 test-set runs for the Track A consistency requirement. Voice latency is
 measured separately in the sidebar because it includes Whisper and TTS time.
+It reports intent accuracy and intent macro-F1 separately, along with the
+classification report, so that a large intent class cannot hide weak
+performance on a smaller class.
 
-The final test set had 35 utterances and three runs.
+The final test set had 36 utterances and three runs. The added out-of-scope
+example was not used in the prompt or in any tuning.
 
-- run 1 intent accuracy: 91.43 percent
-- run 2 intent accuracy: 85.71 percent
-- run 3 intent accuracy: 91.43 percent
-- mean intent accuracy: 89.52 percent
+- run 1 intent accuracy: 91.67 percent
+- run 2 intent accuracy: 88.89 percent
+- run 3 intent accuracy: 91.67 percent
+- mean intent accuracy: 90.74 percent
+- intent macro-F1: 86.93 percent, 85.22 percent, and 86.93 percent by run
+- mean intent macro-F1: 86.36 percent
 - out-of-scope accuracy: 100 percent on all runs
-- slot micro-F1: 95.65 percent, 94.12 percent, and 95.65 percent
-- mean slot micro-F1: 95.14 percent
-- mean latency: 2.38 seconds per turn
-- mean prompt tokens: 1,034
+- slot micro-F1: 80.49 percent, 79.52 percent, and 79.52 percent
+- mean slot micro-F1: 79.84 percent
+- mean latency: 2.21 seconds per turn
+- mean prompt tokens: 1,030
 - mean completion tokens: 33
-- consistency: 33 of 35 rows, or 94.29 percent
+- consistency: 35 of 36 rows, or 97.22 percent
 
 ![Final test intent confusion matrix](eval/results/confusion_matrix.png)
 
 BookTickets remained the hardest intent. The main errors used “see” or
-“watch” without a clear ticket word. One handoff example was also unstable
-across runs. The other intent groups were stable. The model is not fully
-deterministic even with temperature zero because the tool-agent call and
-network responses can change the context.
+“watch” without a clear ticket word. The other intent groups were stable,
+although one CheckShowtimes prediction and one None prediction changed
+between runs. The model is not fully deterministic even with temperature
+zero because the tool-agent call and network responses can change the
+context.
 
 ## 6. Error analysis and requirement derivation
 We noticed the following issues during first evaluation and fixed them in the final design.
@@ -153,13 +160,75 @@ These cases explain the main requirements. The requirement set asks for multi-tu
 - Informal text also causes errors. Examples include tkts, insideout2, and reservashun. The model can often recover the meaning. The fallback cannot recover every form.
 - Negation is another hard case. “I do not want IMAX” must produce Standard, not IMAX. The model can use the full sentence context. A simple entity rule may choose the wrong value.
 
-## 8. Track B comparison
+## 8. The other track: what Track B would likely do
 
-- Track B would offer faster local intent checks and a clearer audit trail. It would also need many examples for short answers, typos, slang, and negation.
+Track B would probably perform well on the clearest examples in this test
+set, especially messages that contain an unmistakable action word, a movie
+title, and a time or ticket count. A bag-of-words recognizer can be very
+effective when a new message is close to one of its example utterances, and
+it would make the BookTickets and CheckShowtimes boundary visible through its
+scores. It would also be cheap to run because recognition happens locally,
+with no API request for each turn.
 
-- Track A handles varied language better. However, it costs more (but still very little), adds network delay, and sends user text to OpenAI. Temperature zero gives stable results for the same prompt and history. A change in history can still change the result.
+The hardest cases in our test set are exactly the cases where Track B would
+have the most trouble. Several BookTickets errors came from short requests
+such as “I want to see Oppenheimer,” where the word “see” does not explicitly
+say whether the user wants a ticket or showtime information. The Track B
+examples could include both meanings, but adding more overlapping examples
+would not guarantee a reliable distinction. The same problem appears in
+correction messages such as “actually make it Tuesday instead of Friday.”
+The meaning depends on the existing dialog state and on the fact that the
+new date replaces only one previous value. Track A can give the whole
+sentence and recent history to a model that has learned broader language
+patterns, while Track B would need explicit state handling and carefully
+designed examples around every likely correction.
 
-- A useful future design might use Track B for clear cases. It would call the model only when the local score is low.
+Paraphrase, typos, slang, and negation would also favor Track A in this
+domain. The test set includes informal forms such as “tkts,” compressed
+movie names, and misspellings, as well as “I don't want the IMAX, just
+regular seats.” A recognizer based on word overlap may score IMAX highly
+even though the user is rejecting it. A synonym list and more examples can
+help with known variations, but they make the recognizer increasingly
+dependent on manual coverage. A pretrained transformer behind Track A is
+more likely to connect “regular seats” with Standard and to understand that
+the negated format is not the requested format. This is a likely advantage,
+not a guarantee, since our own unstable handoff result shows that an LLM can
+still make different choices across runs.
+
+Track B would have the stronger control and auditability story. Its intent
+examples, synonym lists, regex entities, and threshold are all visible in
+the repository, and the same input should produce the same result on the
+same version of the code. It would be easier to prove that a value came
+from the catalog, that a score exceeded the selected threshold, and that an
+unsupported request was sent to the fallback. Track A gives Python the
+final authority over catalog validation, confirmation, cancellation, and
+handoff, so our business rules are still protected, but the initial
+classification and extraction remain probabilistic. The JSON schema makes
+the boundary clearer, but it does not make the model's decision itself
+fully auditable.
+
+The tradeoff is not just accuracy. Track B has nearly zero marginal API
+cost, lower and more predictable latency, and better privacy because user
+messages stay local. Track A sends the message and a trimmed history to
+OpenAI, incurs a small per-turn cost, and normally takes about 2.21 seconds
+per turn in our final test. Track A also reports prompt and completion
+tokens, which makes its cost measurable, while the final three-run
+consistency of 97.22 percent shows that temperature zero does not guarantee
+identical outputs in a networked tool-based system. Track B would be more
+deterministic, although its behavior could still change when its examples
+or threshold are changed.
+
+A practical hybrid would use Track B as a fast local first pass. If the
+recognizer found a strong score for a simple request such as “two tickets
+for Dune at 7 PM,” Python could validate the slots and continue without an
+LLM call. If the score were below a threshold, or if the message contained
+negation, a correction, an unfamiliar spelling, or several competing
+intent cues, the system could send it to the Track A extractor. The reverse
+hybrid would also be useful: Track A could extract the language, while a
+rule-based fast path could handle greetings, cancel commands, catalog
+membership, and final confirmation. That arrangement would preserve the
+paraphrase advantage of Track A while keeping predictable business rules,
+privacy options, and low latency for routine turns.
 
 ## 9. Limits and next steps
 

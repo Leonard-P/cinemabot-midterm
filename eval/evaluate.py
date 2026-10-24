@@ -16,7 +16,7 @@ from extraction import extract, validate  # noqa: E402
 try:
     import matplotlib.pyplot as plt
     from sklearn.metrics import (classification_report, confusion_matrix,
-                                 ConfusionMatrixDisplay)
+                                 ConfusionMatrixDisplay, f1_score)
     HAS_SKLEARN = True
 except ImportError:
     HAS_SKLEARN = False
@@ -59,7 +59,12 @@ def run_once(rows: list[dict]) -> tuple[list, list, list[dict], float, dict]:
 
         # slot matching — compare resolved predicted values against expected
         expected = row["slots"]
-        for slot_name, exp_val in expected.items():
+        slot_names = set(expected) | {
+            name for name in slots
+            if not name.startswith("_") and name != "intent"
+        }
+        for slot_name in slot_names:
+            exp_val = expected.get(slot_name)
             pred_val = slots.get(slot_name)
             slot_results.append({
                 "slot": slot_name,
@@ -78,8 +83,14 @@ def run_once(rows: list[dict]) -> tuple[list, list, list[dict], float, dict]:
 
 def slot_f1(slot_results: list[dict]) -> dict:
     tp = sum(1 for r in slot_results if r["match"] and r["expected"] is not None)
-    fp = sum(1 for r in slot_results if not r["match"] and r["predicted"] is not None)
-    fn = sum(1 for r in slot_results if not r["match"] and r["predicted"] is None)
+    fp = sum(
+        1 for r in slot_results
+        if not r["match"] and r["predicted"] is not None
+    )
+    fn = sum(
+        1 for r in slot_results
+        if not r["match"] and r["expected"] is not None
+    )
     precision = tp / (tp + fp) if (tp + fp) else 0.0
     recall = tp / (tp + fn) if (tp + fn) else 0.0
     f1 = 2 * precision * recall / (precision + recall) if (precision + recall) else 0.0
@@ -87,8 +98,8 @@ def slot_f1(slot_results: list[dict]) -> dict:
 
 
 def oos_accuracy(y_true: list, y_pred: list) -> float:
-    # out-of-scope covers both None (generic OOS) and Handoff (escalation)
-    oos_intents = {"None", "Handoff"}
+    # Handoff is an in-scope escalation intent, not an out-of-scope response.
+    oos_intents = {"None"}
     oos_idx = [i for i, y in enumerate(y_true) if y in oos_intents]
     if not oos_idx:
         return float("nan")
@@ -122,8 +133,12 @@ def main():
 
         if HAS_SKLEARN:
             labels = sorted(set(y_true + y_pred))
+            macro_f1 = f1_score(
+                y_true, y_pred, labels=labels, average="macro", zero_division=0
+            )
             print("\nClassification report:")
             print(classification_report(y_true, y_pred, labels=labels, zero_division=0))
+            print(f"Intent macro-F1:  {macro_f1:.2%}")
 
         sf = slot_f1(slot_results)
         print(f"Slot micro-F1:   {sf['f1']:.2%}  "
