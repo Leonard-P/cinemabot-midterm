@@ -2,6 +2,11 @@
 
 This is a cinema ticket assistant. We built it as midterm for STAT 5350. It is a Track A (LLM hybrid) via Streamlit and gpt-4o-mini. LLM handles slot extraction, Python manages state and catalog validation.
 
+## Demo video
+See the videos in the repository:
+- demo.mp4 — a 5-minute demo of the bot in action to book tickets
+- demo_voice.mp4 — a 1-minute demo of the bot of the voice input mode that also shows the CancelBooking intent.
+
 ## Setup
 
 ```bash
