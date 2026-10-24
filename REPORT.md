@@ -80,6 +80,18 @@ Slot micro-F1 was 100 percent.
 
 Average extraction time was 1.30 seconds.
 
+The latest validation check reported:
+
+- intent accuracy: 91.67 percent
+- out-of-scope accuracy: 100 percent
+- slot micro-F1: 100 percent
+- average latency: 2.55 seconds per turn
+- average tokens: 1,032 prompt and 33 completion tokens
+
+The evaluator also saves an intent confusion matrix and supports three
+test-set runs for the Track A consistency requirement. Voice latency is
+measured separately in the sidebar because it includes Whisper and TTS time.
+
 The final test set had 35 utterances and three runs.
 
 Intent accuracy was 91.43 percent.

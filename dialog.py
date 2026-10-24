@@ -185,6 +185,12 @@ def process_turn(state: dict, slots: dict) -> str:
             summary = _summary(state)
             state.update(new_state())
             return f"Booked! Reference: **{ref}**\n{summary}\n\nEnjoy the film!"
+        if intent == "Deny" and not any(
+            slots.get(slot) is not None
+            for slot in REQUIRED_SLOTS
+        ):
+            state.update(new_state())
+            return "No problem. I won't book those tickets. What else can I help with?"
         # anything else (Deny, BookTickets with new slots, etc.) clears confirmation
         # and falls through so the shared merge+route path handles the correction
         state["awaiting_confirm"] = False

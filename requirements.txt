@@ -5,3 +5,5 @@ streamlit-mic-recorder>=0.0.8
 streamlit-float
 pytest
 hypothesis>=6.0,<6.100
+scikit-learn
+matplotlib

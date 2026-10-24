@@ -1,5 +1,4 @@
 # voice.py — speech-to-text and text-to-speech helpers, from lab-06 pattern
-import base64
 from io import BytesIO
 import os
 import tempfile
@@ -54,8 +53,4 @@ def text_to_speech(text: str) -> bytes:
 
 
 def autoplay_audio(audio_bytes: bytes) -> None:
-    b64 = base64.b64encode(audio_bytes).decode()
-    st.markdown(
-        f'<audio autoplay><source src="data:audio/mp3;base64,{b64}" type="audio/mp3"></audio>',
-        unsafe_allow_html=True,
-    )
+    st.audio(audio_bytes, format="audio/mp3", autoplay=True)

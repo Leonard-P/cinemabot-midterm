@@ -12,9 +12,6 @@ source .venv/bin/activate
 # install the application, voice, and evaluation dependencies
 python -m pip install --upgrade pip
 python -m pip install -r 5350-chatbot/requirements.txt
-# The microphone button is provided by streamlit-mic-recorder.
-python -m pip install "streamlit-mic-recorder>=0.0.8"
-python -m pip install scikit-learn matplotlib
 
 # copy the sample environment file and add your key
 cp 5350-chatbot/.env.sample .env
@@ -42,10 +39,10 @@ Opens at http://localhost:8501. The sidebar shows intent, slots, and dialog stat
 
 ```bash
 # validation set (tune prompts/synonyms from these results)
-python eval/evaluate.py --csv eval/validation.csv --out eval/results
+python -m eval.evaluate --csv eval/validation.csv --out eval/results
 
 # test set — run once only at the end
-python eval/evaluate.py --csv eval/test.csv --runs 3 --out eval/results
+python -m eval.evaluate --csv eval/test.csv --runs 3 --out eval/results
 ```
 
 Results print to stdout. `eval/results/confusion_matrix.png` is saved when sklearn is available.
@@ -62,9 +59,8 @@ The setup installs the following packages:
 - `pytest` and `hypothesis` — test dependencies from the course bundle
 - `scikit-learn` and `matplotlib` — evaluation metrics and confusion matrix
 
-The core, voice, and test packages are declared in
-`5350-chatbot/requirements.txt`. The evaluation packages are installed
-explicitly above because `eval/evaluate.py` uses them when available.
+The core, voice, test, and evaluation packages are declared in
+`5350-chatbot/requirements.txt`.
 The microphone package must be installed in the same environment used to
 start Streamlit. Verify it with:
 
