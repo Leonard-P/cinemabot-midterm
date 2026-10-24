@@ -55,7 +55,6 @@ The setup installs the following packages:
 - `streamlit` — web application UI
 - `python-dotenv` — loads `OPENAI_API_KEY` from `.env`
 - `streamlit-mic-recorder` — manual start and stop voice input
-- `streamlit-float` — voice UI support
 - `pytest` and `hypothesis` — test dependencies from the course bundle
 - `scikit-learn` and `matplotlib` — evaluation metrics and confusion matrix
 

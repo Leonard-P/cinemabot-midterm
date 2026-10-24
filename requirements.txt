@@ -2,7 +2,6 @@ openai>=1.40
 streamlit>=1.37
 python-dotenv>=1.0
 streamlit-mic-recorder>=0.0.8
-streamlit-float
 pytest
 hypothesis>=6.0,<6.100
 scikit-learn

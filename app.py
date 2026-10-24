@@ -14,7 +14,6 @@ load_dotenv()
 # voice is optional — only imported when the packages are installed
 try:
     from streamlit_mic_recorder import mic_recorder
-    from streamlit_float import float_init
     from voice import speech_to_text, text_to_speech, autoplay_audio
     VOICE_OK = True
 except ImportError as exc:
@@ -25,8 +24,6 @@ else:
 
 st.set_page_config(page_title="CineBot", page_icon="🎬", layout="wide")
 st.title("🎬 CineBot — Cinema Ticket Assistant")
-if VOICE_OK:
-    float_init()
 
 if "messages" not in st.session_state:
     st.session_state.messages = [
@@ -126,11 +123,8 @@ for m in st.session_state.messages:
 # render here even though the input callback runs after the footer is created.
 transcript_tail = st.container()
 
-# Keep all transient input and voice UI in one fixed footer. The footer is
-# rendered independently from the transcript, so the chat input cannot move
-# below a newly rendered message during a blocking request.
-footer_container = st.container()
-with footer_container:
+# Keep voice controls above Streamlit's native bottom-pinned chat input.
+with st.container():
     if VOICE_OK:
         if not st.session_state.voice_enabled:
             if st.button("Enable microphone", use_container_width=True):
@@ -175,13 +169,5 @@ with footer_container:
         with status_slot:
             st.info("Generating voice reply...")
 
-    if user_text := st.chat_input("e.g. Two IMAX tickets for Dune this Friday at 8pm"):
-        handle_input(user_text)
-
-if VOICE_OK:
-    footer_container.float(
-        "bottom: 0rem; left: 21rem; right: 0.5rem; width: auto; "
-        "box-sizing: border-box; overflow-x: hidden; z-index: 999; "
-        "background-color: var(--background-color); "
-        "padding: 0.5rem 0.5rem 1rem;"
-    )
+if user_text := st.chat_input("e.g. Two IMAX tickets for Dune this Friday at 8pm"):
+    handle_input(user_text)

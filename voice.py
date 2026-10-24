@@ -27,7 +27,7 @@ def _has_speech_energy(wav: wave.Wave_read) -> bool:
         samples = samples[::wav.getnchannels()]
     peak = max(abs(sample) for sample in samples)
     rms = (sum(sample * sample for sample in samples) / len(samples)) ** 0.5
-    return peak >= 600 and rms >= 120
+    return peak >= 30 and rms >= 10
 
 
 def speech_to_text(audio_bytes: bytes) -> str | None:
