@@ -16,7 +16,7 @@ source .venv/bin/activate
 
 # install the application, voice, and evaluation dependencies
 python -m pip install --upgrade pip
-python -m pip install -r 5350-chatbot/requirements.txt
+python -m pip install -r requirements.txt
 
 # copy the sample environment file and add your key
 cp 5350-chatbot/.env.sample .env
